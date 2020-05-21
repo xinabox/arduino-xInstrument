@@ -5,6 +5,7 @@ Currently supported:
 * Google sheet
 * OD01 ouput
 * Serial Output
+* Blynk BLE
 
 ## Dependency
 * [arduino core](https://github.com/xinabox/arduino-CORE)
