@@ -6,11 +6,14 @@ void setup() {
   // put your setup code here, to run once
   instr.enableLEDS();
   instr.enableOD01();
-  instr.enableSerial();
   instr.enableWiFi();
   instr.enableGoogleSheet();
   instr.enableAzure();
   instr.enableSensor("sw01");
+  instr.enableSensor("sl01");
+  instr.enableSensor("sw10");
+  instr.enableSensor("sw12");
+  instr.enableSerial();
   instr.begin();
 
 }
