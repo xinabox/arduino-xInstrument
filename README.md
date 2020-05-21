@@ -9,6 +9,7 @@ Currently supported:
 ## Dependency
 * [arduino core](https://github.com/xinabox/arduino-CORE)
 * [arduino-SW01](https://github.com/xinabox/arduino-SW01.git)
+* [arduino-SL01](https://github.com/xinabox/arduino-SL01)
 * [arduino-SW03](https://github.com/xinabox/arduino-SW03.git)
 * [arduino-SW10](https://github.com/xinabox/arduino-SW10)
 * [arduino-SW12](https://github.com/xinabox/arduino-SW12)
