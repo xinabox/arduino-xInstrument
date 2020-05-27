@@ -1,20 +1,9 @@
 #include "Arduino.h"
 #include "xInstrument.h"
 
-uint8_t xInstrument::ACK_SW01 = 0;
-uint8_t xInstrument::ACK_SW10 = 0;
-uint8_t xInstrument::ACK_SW12 = 0;
-uint8_t xInstrument::ACK_SL01 = 0;
-
-float xInstrument::SW01_temp = 0;
-float xInstrument::SW01_press = 0;
-float xInstrument::SW01_humidity = 0;
-float xInstrument::SW10_temp = 0;
-float xInstrument::SW12_temp = 0;
-float xInstrument::SW12_humidity = 0;
-float xInstrument::SL01_lux = 0;
-float xInstrument::SL01_uva = 0;
-float xInstrument::SL01_uvb = 0;
+char* xInstrument::vars[50] = {};
+double xInstrument::values[50] = {};
+uint8_t xInstrument::num_vars = 0;
 
 xInstrument::xInstrument()
 {
@@ -54,68 +43,6 @@ bool xInstrument::enableSerial()
   return true;
 }
 
-// Enable XinaBox sensors
-bool xInstrument::enableSensor(String sensor)
-{
-  // Make string lower case
-  sensor.toLowerCase();
-
-  //OD01.println(sensor);
-
-  // SW01 sensor
-  if (sensor == String("sw01"))
-  {
-    if (xCore.ping(BME280_I2C_ADDRESS))
-    {
-      SW01.begin();
-      ACK_SW01 = 0xFF;
-    } else {
-      ACK_SW01 = 0x00;
-      return false;
-    }
-  }
-  
-  // SL01 sensor
-  if (sensor == String("sl01"))
-  {
-	  if(xCore.ping(VEML6075_I2C_ADDRESS) && xCore.ping(TSL4531_I2C_ADDRESS))
-	  {
-		SL01.begin();
-		ACK_SL01 = 0xFF;
-	  }else{
-		ACK_SL01 = 0x00;
-	  }
-  }
-
-
-  // SW10 sensor
-  if (sensor == String("sw10"))
-  {
-    if (xCore.ping(LM75B_I2C_ADDR))
-    {
-      SW10.begin();
-      ACK_SW10 = 0xFF;
-    } else {
-      ACK_SW10 = 0x00;
-      return false;
-    }
-  }
-
-  // SW12 sensor
-  if (sensor == String("sw12"))
-  {
-    if (xCore.ping(SW12_I2C_ADDR))
-    {
-      SW12.begin();
-      ACK_SW12 = 0xFF;
-    } else {
-      ACK_SW12 = 0x00;
-      return false;
-    }
-  }
-
-  return true;
-}
 
 bool xInstrument::enableWiFi()
 {
@@ -147,34 +74,37 @@ bool xInstrument::enableSPIFFS()
   SPIFFS_enabled  = true;
 }
 
+void xInstrument::createVariables(int num, ...)
+{
+	num_vars = num;
+	va_list valist;
+	va_start(valist, num);
+	
+	for (int i = 0; i < num; i++) { //access all the arguments assigned to valist
+      vars[i] = va_arg(valist, char*);
+   }
+   
+   va_end(valist); //clean memory reserved for valist
+}
+
+void xInstrument::updateVariables(int num, ...)
+{
+	va_list valist;
+	va_start(valist, num);
+	
+	for (int i = 0; i < num; i++) { //access all the arguments assigned to valist
+      values[i] = va_arg(valist, double);
+   }
+   
+   va_end(valist); //clean memory reserved for valist
+}
+
 void xInstrument::myTimerEvent()
 {
-  if(ACK_SW01)
-  {
-	Blynk.virtualWrite(1, SW01_temp);
-	Blynk.virtualWrite(2, SW01_press);
-	Blynk.virtualWrite(3, SW01_humidity);
-  }
-  
-  if(ACK_SL01)
-  {
-	Blynk.virtualWrite(4, SL01_lux);
-	Blynk.virtualWrite(5, SL01_uva);
-	Blynk.virtualWrite(6, SL01_uvb);
-  }
-  
-  if(ACK_SW10)
-  {
-	Blynk.virtualWrite(7, SW10_temp);
-  }
-  
-  if(ACK_SW12)
-  {
-	Blynk.virtualWrite(8, SW12_temp);
-	Blynk.virtualWrite(9, SW12_humidity);
-  }
-  
-  
+	for(int i = 0; i < num_vars; i++)
+	{
+		Blynk.virtualWrite(i, values[i]);
+	}
 }
 
 void xInstrument::sendData(String params) {
@@ -262,7 +192,7 @@ bool xInstrument::begin()
 		  prv.getVariable("Blynk_AUTH", Blynk_AUTH);
 		  Blynk.setDeviceName("xInstrument");
 		  Blynk.begin(Blynk_AUTH.c_str());
-          timer.setInterval(5000L, myTimerEvent);
+          timer.setInterval(1000L, myTimerEvent);
 	  }
 
       if (Serial_enabled && WiFi_enabled)
@@ -314,64 +244,51 @@ bool xInstrument::begin()
   }
 }
 
+void xInstrument::updateAzure(char* var, float value)
+{
+	if(Azure_enabled && WiFi_enabled && !BlynkBLE_enabled)
+	{
+		#if ARDUINOJSON_VERSION_MAJOR == 5
+			DynamicJsonBuffer jsonBuffer;
+			JsonObject& root = jsonBuffer.createObject();
+		#elif ARDUINOJSON_VERSION_MAJOR == 6
+			DynamicJsonDocument root(1024);
+		#endif
+		
+		root[var] = value;
+		
+		azure_string = "";
+		#if ARDUINOJSON_VERSION_MAJOR == 5
+			root.printTo(azure_string);
+		#elif ARDUINOJSON_VERSION_MAJOR == 6
+			serializeJson(root, azure_string);
+		#endif
+
+		
+		EVENT_INSTANCE* message = Esp32MQTTClient_Event_Generate(azure_string.c_str(), MESSAGE);
+		Esp32MQTTClient_Event_AddProp(message, "CW02_instrument", "true");
+		Esp32MQTTClient_SendEventInstance(message);
+	}
+	
+}
+
+void xInstrument::updateAzure(String str)
+{
+	if(Azure_enabled && WiFi_enabled && !BlynkBLE_enabled)
+	{
+		
+		azure_string =  str;
+		
+		EVENT_INSTANCE* message = Esp32MQTTClient_Event_Generate(azure_string.c_str(), MESSAGE);
+		Esp32MQTTClient_Event_AddProp(message, "CW02_instrument", "true");
+		Esp32MQTTClient_SendEventInstance(message);
+	
+	}
+}
+
 void xInstrument::loop()
 {
 	
-  if(ACK_SW01)
-  {
-	  SW01.poll();
-	  SW01_temp = SW01.getTempC();
-	  SW01_press = SW01.getPressure();
-	  SW01_humidity = SW01.getHumidity();
-  }
-  
-  
-  if(ACK_SW10)
-  {
-	  SW10.poll();
-	  SW10_temp = SW10.getTempC();
-  }
-  
-  if(ACK_SW12)
-  {
-	  SW12.getTempC(SW12_temp);
-	  SW12.getHumidity(SW12_humidity);
-  }
-  
-  if(ACK_SL01)
-  {
-	  SL01.poll();
-	  SL01_lux = SL01.getLUX();
-	  SL01_uva = SL01.getUVA();
-	  SL01_uvb = SL01.getUVB();
-  }
-  
-  if (Serial_enabled && !BlynkBLE_enabled)
-  {
-    if (ACK_SW01)
-    {
-      Serial.print(String(SW01_temp) + ",");
-      Serial.print(String(SW01_press / 100.0) + ",");
-      Serial.print(String(SW01_humidity) + ",");
-    }
-	
-	if (ACK_SL01)
-    {
-      Serial.print(String(SL01_lux) + ",");
-      Serial.print(String(SL01_uva) + ",");
-      Serial.print(String(SL01_uvb) + ",");
-    }
-	
-	
-	if (ACK_SW12)
-    {
-      Serial.print(String(SW12_temp) + ",");
-      Serial.print(String(SW12_humidity) + ",");
-    }
-	
-	
-	Serial.println();
-  }
   
   if(BlynkBLE_enabled)
   {
@@ -381,38 +298,12 @@ void xInstrument::loop()
 	
   if (OD01_enabled && !BlynkBLE_enabled)
   {
-    if (ACK_SW01)
-    {
-	  OD01.clear();
-      OD01.println("SW01_Temp_" + String(SW01_temp) + "_C");
-      OD01.println("SW01_Press_" + String(SW01_press / 100.0) + "_hPa");
-      OD01.println("SW01_Hum_" + String(SW01_humidity) + "_%RH");
-	  delay(2000);
-    }
-	
-	if (ACK_SL01)
-    {
-	  OD01.clear();
-      OD01.println("SL01_Lux_" + String(SL01_lux) + "_lux");
-      OD01.println("SL01_UVA_" + String(SL01_uva) + "_uW/m^2");
-      OD01.println("SL01_UVB_" + String(SL01_uvb) + "_uW/m^2");
-	  delay(2000);
-    }
-	
-    if (ACK_SW10)
-    {
-	  OD01.clear();
-      OD01.println("SW10_Temp_" + String(SW10_temp) + "_C");
-	  delay(2000);
-    }
-	
-	if (ACK_SW12)
-    {
-	  OD01.clear();
-      OD01.println("SW12_Temp_" + String(SW12_temp) + "_C");
-	  OD01.println("SW12_Hum_" + String(SW12_humidity) + "_%RH");
-	  delay(2000);
-    }
+	  OD01.home();
+	  
+	  for(int i = 0; i < num_vars; i++)
+	  {
+		  OD01.println(String(vars[i]) + "=" + String(values[i]));
+	  }
   }
 
   
@@ -424,69 +315,43 @@ void xInstrument::loop()
 	  
 	  gsheet_string = "timestamp=" + String(millis());
 	  
-	  if(ACK_SW01)
+	  for (int i = 0; i <  num_vars; i++)
 	  {
-		  gsheet_string += "&sw01_temp=" + String(SW01_temp);
-		  gsheet_string += "&sw01_press=" + String(SW01_press);
-		  gsheet_string += "&sw01_hum=" + String(SW01_humidity);
+		  gsheet_string += "&" + String(vars[i]) + "=" + String(values[i]);
 	  }
 	  
-	  if(ACK_SL01)
-	  {
-		  gsheet_string += "&sl01_lux=" + String(SL01_lux);
-		  gsheet_string += "&sl01_uva=" + String(SL01_uva);
-		  gsheet_string += "&sl01_uvb=" + String(SL01_uvb);
-	  }
-		  
+	  sendData(gsheet_string);
+	  Serial.println(gsheet_string);
 	  
-	  if(ACK_SW10)
-	  {
-		  gsheet_string += "&sw10_temp=" + String(SW10_temp);
-	  }
-	  
-	  if(ACK_SW12)
-	  {
-		  gsheet_string += "&sw12_temp=" + String(SW12_temp);
-		  gsheet_string += "&sw12_humidity=" + String(SW12_humidity);
-	  }
-		  
-		  // Send Data to gsheet
-		  sendData(gsheet_string);
-	}
+	  delay(2000);
 	  
 	  digitalWrite(LED_GREEN, LOW);
 	  
 	  delay(2000);
+	  
+  }
+  
+  if(Serial_enabled)
+  {
+	  String print_str = "";
+	  
+	  for(int i = 0; i < num_vars; i++)
+	  {
+		  print_str += String(values[i]) + ",";
+	  }
+	  
+	  Serial.println(print_str);
+  }
   
     // Send data to Azure
   if(Azure_enabled && WiFi_enabled && !BlynkBLE_enabled)
   {
-	  
-	  if(ACK_SW01)
-	  {
-		  root["sw01_temp"] = SW01_temp;
-		  root["sw01_press"] = SW01_press;
-		  root["sw01_hum"] = SW01_humidity;
-	  }
-	  
-	  if(ACK_SL01)
-	  {
-		  root["sl01_lux"] = SL01_lux;
-		  root["sl01_uva"] = SL01_uva;
-		  root["sl01_uvb"] = SL01_uvb;
-	  }
-	  
-	  
-	  if(ACK_SW10)
-	  {
-		  root["sw10_temp"] = SW10_temp;
-	  }
-	  
-	  if(ACK_SW12)
-	  {
-		  root["sw12_temp"] = SW12_temp;
-		  root["sw12_hum"] = SW12_humidity;
-	  }
+	
+	for(int i = 0; i < num_vars; i++)
+	{
+		root[vars[i]] = values[i];
+	}
+	
 	azure_string = "";
 	#if ARDUINOJSON_VERSION_MAJOR == 5
 		root.printTo(azure_string);
