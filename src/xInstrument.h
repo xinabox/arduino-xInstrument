@@ -12,7 +12,6 @@
 #include "xCore.h"
 #include "xOD01.h"
 #include "xProvision.h"
-//#include "ESP8266WiFi.h"
 #include <WiFi.h>
 #include <WiFiMulti.h>
 #include <HTTPClient.h>
@@ -26,20 +25,8 @@
 #include <BLEDevice.h>
 #include <BLEServer.h>
 
-// All Weather sensors
-#include "xSW01.h"
-#include "xSW03.h"
-#include "xSW10.h"
-#include "xSW12.h"
-#include "xSL01.h"
 
 #define OD01_I2C_ADDRESS 				0x3C
-#define BME280_I2C_ADDRESS 				0x76
-#define MPL3115A2_I2C_ADDRESS			0x60
-#define LM75B_I2C_ADDR 				    0x48
-#define SW12_I2C_ADDR 				    0x5F
-#define VEML6075_I2C_ADDRESS			0x10
-#define TSL4531_I2C_ADDRESS 		    0x29
 
 #define LED_RED 25
 #define LED_GREEN 26
@@ -65,38 +52,18 @@ class xInstrument
 		bool enableSPIFFS(void);
 		static void myTimerEvent(void);
 		void sendData(String params);
-		#if ARDUINOJSON_VERSION_MAJOR == 5
-			DynamicJsonBuffer jsonBuffer;
-			JsonObject& root = jsonBuffer.createObject();
-		#elif ARDUINOJSON_VERSION_MAJOR == 6
-			DynamicJsonDocument root(1024);
-		#endif
+		void updateAzure(char* var, float value);
+		void updateAzure(String str);
+		void createVariables(int num, ...);
+		void updateVariables(int num, ...);
 	
 	private:
 		xOD01 OD01;
-		xSW01 SW01;
-		xSW03 SW03;
-		xSW10 SW10;
-		xSW12 SW12;
-		xSL01 SL01;
-		xProvision prv;   
+		xProvision prv;
+		static uint8_t num_vars;
 		String ssid, password;
 		String gas;
 		String Blynk_AUTH;
-		static float SW01_temp;
-		static float SW01_press;
-		static float SW01_humidity;
-		static float SW10_temp;
-		static float SW12_temp;
-		static float SW12_humidity;
-		static float SL01_lux;
-		static float SL01_uva;
-		static float SL01_uvb;
-		static uint8_t ACK_SW01;
-		static uint8_t ACK_SW03;
-		static uint8_t ACK_SW10;
-		static uint8_t ACK_SW12;
-		static uint8_t ACK_SL01;
 		boolean WiFi_enabled;
 		boolean BlynkBLE_enabled;
 		boolean Gsheet_enabled;
@@ -109,6 +76,14 @@ class xInstrument
 		String connection_string;
 		String azure_string;
 		BlynkTimer timer;
+		#if ARDUINOJSON_VERSION_MAJOR == 5
+			DynamicJsonBuffer jsonBuffer;
+			JsonObject& root = jsonBuffer.createObject();
+		#elif ARDUINOJSON_VERSION_MAJOR == 6
+			DynamicJsonDocument root(1024);
+		#endif
+		static char* vars[50];
+		static double values[50];
 		PROGMEM const char * root_ca=\
                                 "-----BEGIN CERTIFICATE-----\n"\
                                 "MIIESjCCAzKgAwIBAgINAeO0mqGNiqmBJWlQuDANBgkqhkiG9w0BAQsFADBMMSAw\n"\
