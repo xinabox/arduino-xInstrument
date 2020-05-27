@@ -37,7 +37,7 @@ void loop() {
   uvb = SL01.getUVB();
   
   // update variables with sensor values
-  instr.updateVariables(6, tempC, press, lux, uva, uvb);
+  instr.updateVariables(6, tempC, press, hum, lux, uva, uvb);
   instr.loop();
   
 
