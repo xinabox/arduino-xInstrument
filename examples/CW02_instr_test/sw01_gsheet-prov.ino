@@ -16,7 +16,6 @@ void setup() {
   instr.begin();
   Wire.begin();
   SW01.begin();
-  instr.enableSerial();
 
 }
 
